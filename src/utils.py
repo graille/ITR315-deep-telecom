@@ -9,7 +9,7 @@ def ber_performance(modulation, EbN0dBs, channel_function, L=1000, target_nb_err
         nb_errors = 0
         nb_elements = 0
         
-        print("Start EbN0", EbN0dB)
+        print("Start EbN0 %d/%d"%(i,len(EbN0dBs)), EbN0dB)
         
         while (nb_errors < target_nb_errors):
             b = np.random.randint(0, 2, L)
