@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+import sys
+sys.path.append('../')
+
 from src.communications import *
 from src.utils import ber_performance
 import matplotlib.pyplot as plt
