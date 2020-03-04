@@ -1,85 +1,116 @@
 # -*- coding: utf-8 -*-
+from abc import ABC, abstractmethod
+from enum import Enum, auto
+from multiprocessing import Pool
 
 import numpy as np
 
+from src.utils import calculate_distance, get_all_possible_words
 
-class Transmitter:
-    def __init__(self, modulation='BPSK'):
-        self.modulation = modulation
 
-    def transmitt(self, b):
-        # Map symbols
-        return 2. * b - 1.
+class ChannelExtremum:
+    def __init__(self, modulation='BPSK', fec_matrix=None):
+        if fec_matrix is None:
+            fec_matrix = np.array([[1]])
 
-    @staticmethod
-    def get_all_possible_words(k):
-        """
-            Return all possible code of length k
-        """
+        self.modulation = modulation.upper()
+        self.fec_matrix = np.array(fec_matrix)
 
-        if k == 1:
-            yield [0]
-            yield [1]
+    @property
+    def has_fec_matrix(self):
+        return (np.size(self.fec_matrix, 0) > 1) or (np.size(self.fec_matrix, 1) > 1)
+
+    @property
+    def block_length(self):
+        return np.size(self.fec_matrix, 0)
+
+    @property
+    def block_coded_length(self):
+        return np.size(self.fec_matrix, 1)
+
+
+class Transmitter(ChannelExtremum):
+    def transmit(self, b):
+        b = np.array(b)
+
+        # Apply error correction code matrix
+        if self.has_fec_matrix:
+            nb_blocks = len(b) // self.block_length
+            b_t = np.zeros(nb_blocks * self.block_coded_length)
+
+            for i in range(nb_blocks):
+                b_l = b[i * self.block_length:(i + 1) * self.block_length]
+                b_t[i * self.block_coded_length:(i + 1) * self.block_coded_length] = np.dot(b_l, self.fec_matrix)
         else:
-            for elt in Transmitter.get_all_possible_words(k - 1):
-                yield [0] + elt
-                yield [1] + elt
+            b_t = b
 
-    @staticmethod
-    def calculate_distance(u1, u2):
-        r = 0
-        for i in range(len(u1)):
-            r += (u1[i] - u2[i]) ** 2
-
-        return r
-
-    def apply_map(self, y_n, G):
-        """
-
-        :param y_n: Symbols such as len(y_n) = size(G, 1) / M
-        :param G:
-        :param transmitter:
-        :return:
-        """
-        block_length = np.size(G, 0)
-
-        v_min = float('inf')
-        arg_min = -1
-
-        for elt in Transmitter.get_all_possible_words(block_length):
-            b_coded = np.array(elt).dot(G)
-            x_n_estimated = self.transmitt(b_coded)
-
-            d = np.sum((np.array(x_n_estimated) - np.array(y_n)) ** 2)
-
-            if d < v_min:
-                arg_min = elt
-                v_min = d
-
-        return arg_min
+        # Map symbols
+        if self.modulation in ['BPSK']:
+            return (2. * b_t) - 1.
+        else:
+            raise Exception(f"Unknown modulation {self.modulation}")
 
 
-class Receiver:
-    def receive(self, c):
-        b = list(map(lambda x: 0 if x < 0 else 1, c))
+class ReceiverMode(Enum):
+    CLASSIC = auto()
+    MAP = auto()
+    DEEP_LEARNING = auto()
 
-        return b
 
-    @staticmethod
-    def calculate_ber(b_wanted, b_received):
-        """
-            Return the BER
-        """
-        assert ((len(b_wanted) == len(b_received)), 'Both input must have the same length')
-        return float(np.sum(b_wanted == b_received)) / float(len(b_wanted))
+class Receiver(ChannelExtremum):
+    def __init__(self, modulation='BPSK', fec_matrix=None, mode=ReceiverMode.CLASSIC):
+        super().__init__(modulation, fec_matrix)
+        self.mode = mode
+
+        # Pre-calculate coded elements for G
+        transmitter = Transmitter(modulation, self.fec_matrix)
+
+        self.block_elements = []
+        self.block_coded_elements = []
+        for elt in get_all_possible_words(self.block_length):
+            self.block_elements.append(elt)
+            self.block_coded_elements.append(transmitter.transmit(elt))
+
+    def receive(self, y_n):
+        y_n = np.array(y_n)
+
+        if self.mode == ReceiverMode.CLASSIC:
+            # If we are using a FEC matrix, we cannot demap directly, we need to decode the error correction code first
+            if self.has_fec_matrix:
+                raise Exception("You cannot decode directly by using a error correction code")
+
+            # Otherwise, we can demap directly the bits
+            if self.modulation in ['BPSK']:
+                return np.array(list(map(lambda x: 0 if x < 0 else 1, y_n)))
+            else:
+                raise Exception(f"Unknown modulation {self.modulation}")
+        elif self.mode == ReceiverMode.MAP:
+            # If we didn't passed a FEC matrix, we don't need to use that method, a threshold detector is enough
+            if not self.has_fec_matrix:
+                self.mode = ReceiverMode.CLASSIC
+                return self.receive(y_n)
+
+            # Otherwise, we use the MAP detector
+            nb_blocks = len(y_n) // self.block_coded_length
+            b_r = np.zeros(nb_blocks * self.block_length)
+
+            for i in range(nb_blocks):
+                y_n_b = y_n[i * self.block_coded_length:(i + 1) * self.block_coded_length]
+
+                # Apply MAP estimator
+                distances = np.array(list(map(lambda x: calculate_distance(y_n_b, x), self.block_coded_elements)))
+                b_r[i * self.block_length:(i + 1) * self.block_length] = self.block_elements[int(np.argmin(distances))]
+
+            return b_r
+
+
+class Channel(ABC):
+    @abstractmethod
+    def process(self, c, EsN0dB):
+        pass
 
 
 class AWGNChannel:
-    def process(self, c, EbN0dB):
-        Pn = np.var(c) / 10. ** (EbN0dB / 10.)
+    def process(self, c, EsN0dB):
+        Pn = np.var(c) / (10. ** (EsN0dB / 10.))
         return (np.sqrt(Pn / 2.) * np.random.randn(len(c))) + c
-
-
-if __name__ == '__main__':
-    for elt in Transmitter.get_all_possible_words(3):
-        print(elt)

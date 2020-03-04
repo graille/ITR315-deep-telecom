@@ -8,15 +8,23 @@ from src.utils import ber_performance, get_basic_channel_fnt
 
 # Configuration
 MODULATION = 'BPSK'
-EbN0dBs = np.linspace(-15, 8, 10)
+EbN0dBs = np.linspace(-15, 7, 10)
+G = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+              [1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+              [1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+              [1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+              [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0],
+              [1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0],
+              [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
+              [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
 
 # Initialization
-transmitter = Transmitter(MODULATION)
+transmitter = Transmitter(MODULATION, G)
 channel = AWGNChannel()
-receiver = Receiver(MODULATION)
+receiver = Receiver(MODULATION, G, ReceiverMode.MAP)
 
 if __name__ == '__main__':
-    BER = ber_performance(EbN0dBs, get_basic_channel_fnt(transmitter, channel, receiver), 1000, 100)
+    BER = ber_performance(EbN0dBs, get_basic_channel_fnt(transmitter, channel, receiver, G), np.size(G, 0) * 100, 100)
 
     # Get theoretical curve
     EbN0 = np.power(10 * np.ones(len(EbN0dBs)), EbN0dBs / 10)
