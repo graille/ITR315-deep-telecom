@@ -48,7 +48,7 @@ class Transmitter(ChannelComponent):
 
             for i in range(nb_blocks):
                 b_l = b[i * self.block_length:(i + 1) * self.block_length]
-                b_t[i * self.block_coded_length:(i + 1) * self.block_coded_length] = np.dot(b_l, self.fec_matrix)
+                b_t[i * self.block_coded_length:(i + 1) * self.block_coded_length] = np.dot(b_l, self.fec_matrix) % 2
         else:
             b_t = b
 
@@ -126,6 +126,6 @@ class AWGNChannel(Channel):
     def process(self, c, EbN0dB):
         fec_factor = (np.size(self.fec_matrix, 1) / np.size(self.fec_matrix, 0))
 
-        Pn = np.var(c) / (10. ** (EbN0dB / 10.)) * (1 / self.BPS) * fec_factor
+        Pn = (np.var(c) / (10. ** (EbN0dB / 10.))) * (1 / self.BPS) * fec_factor
 
         return (np.sqrt(Pn / 2.) * np.random.randn(len(c))) + np.array(c)

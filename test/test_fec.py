@@ -7,7 +7,7 @@ from src.utils import ber_performance, get_basic_channel_fct, show_ber
 
 # Configuration
 MODULATION = 'BPSK'
-EbN0dBs = np.linspace(-15, 8, 15)
+EbN0dBs = np.linspace(-15, 7, 10)
 
 # Course
 G = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -19,12 +19,12 @@ G = np.array([[1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
               [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0],
               [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
 
-# Hamming
-G = np.array([[1, 0, 0, 0, 1, 1, 0],
-              [0, 1, 0, 0, 0, 1, 1],
-              [0, 0, 1, 0, 1, 0, 1],
-              [0, 0, 0, 1, 1, 1, 1]])
-
+# # Hamming
+# G = np.array([[1, 0, 0, 0, 1, 1, 0],
+#               [0, 1, 0, 0, 0, 1, 1],
+#               [0, 0, 1, 0, 1, 0, 1],
+#               [0, 0, 0, 1, 1, 1, 1]])
+#
 # # Repetition
 # G = np.ones((1, 5))
 
@@ -38,7 +38,7 @@ if __name__ == '__main__':
         EbN0dBs,
         get_basic_channel_fct(transmitter, channel, receiver),
         np.size(G, 0) * 500,
-        100
+        20
     )
 
     # Plot results
