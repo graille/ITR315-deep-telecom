@@ -1,19 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import scipy.stats as sc_stats
+import matplotlib.pyplot as plt
 
 
-def get_basic_channel_fnt(transmitter, channel, receiver, G=None):
-    if G is None:
-        G = np.array([[1]])
-
-    factor = 10.0 * np.log10(np.size(G, 1) / np.size(G, 0))
-
+def get_basic_channel_fct(transmitter, channel, receiver):
     def channel_fnt(b, EbN0dB):
-        EsN0dB = EbN0dB + factor
-
         c = transmitter.transmit(b)
-        d = channel.process(c, EsN0dB)
+        d = channel.process(c, EbN0dB)
         b_r = receiver.receive(d)
 
         return b_r, c, d
@@ -59,6 +54,25 @@ def ber_performance(EbN0dBs, channel_function, L=1000, target_nb_errors=50):
         BER[i] = float(nb_errors) / float(nb_elements)
 
     return BER
+
+
+def show_ber(modulation, EbN0dBs, BER):
+    modulation = modulation.upper()
+
+    # Get theoretical curve
+    if modulation in ['BPSK']:
+        EbN0 = np.power(10 * np.ones(len(EbN0dBs)), EbN0dBs / 10)
+        pe = sc_stats.norm.sf(np.sqrt(2 * EbN0))
+
+        plt.plot(EbN0dBs, pe)  # plot the result
+
+    plt.plot(EbN0dBs, BER, '-x')  # plot the result
+
+    plt.legend(['Theory', 'Simulation'])
+    plt.xlabel('$\\frac{E_b}{N_0}$ in (dB)')
+    plt.ylabel('$P_e$')
+    plt.yscale('log')
+    plt.grid(True)  # grid on
 
 
 if __name__ == '__main__':

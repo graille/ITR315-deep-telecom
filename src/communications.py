@@ -8,7 +8,7 @@ import numpy as np
 from src.utils import calculate_distance, get_all_possible_words
 
 
-class ChannelExtremum:
+class ChannelComponent:
     def __init__(self, modulation='BPSK', fec_matrix=None):
         if fec_matrix is None:
             fec_matrix = np.array([[1]])
@@ -28,8 +28,16 @@ class ChannelExtremum:
     def block_coded_length(self):
         return np.size(self.fec_matrix, 1)
 
+    @property
+    def BPS(self):
+        rBPS = {
+            "BPSK": 1
+        }
 
-class Transmitter(ChannelExtremum):
+        return rBPS[self.modulation]
+
+
+class Transmitter(ChannelComponent):
     def transmit(self, b):
         b = np.array(b)
 
@@ -57,8 +65,8 @@ class ReceiverMode(Enum):
     DEEP_LEARNING = auto()
 
 
-class Receiver(ChannelExtremum):
-    def __init__(self, modulation='BPSK', fec_matrix=None, mode=ReceiverMode.CLASSIC):
+class Receiver(ChannelComponent):
+    def __init__(self, modulation='BPSK', fec_matrix=None, mode=ReceiverMode.MAP):
         super().__init__(modulation, fec_matrix)
         self.mode = mode
 
@@ -87,6 +95,7 @@ class Receiver(ChannelExtremum):
         elif self.mode == ReceiverMode.MAP:
             # If we didn't passed a FEC matrix, we don't need to use that method, a threshold detector is enough
             if not self.has_fec_matrix:
+                print("Auto switch mode")
                 self.mode = ReceiverMode.CLASSIC
                 return self.receive(y_n)
 
@@ -104,13 +113,19 @@ class Receiver(ChannelExtremum):
             return b_r
 
 
-class Channel(ABC):
+class Channel(ChannelComponent, ABC):
+    def __init__(self, modulation='BPSK', fec_matrix=None):
+        super().__init__(modulation, fec_matrix)
+
     @abstractmethod
     def process(self, c, EsN0dB):
         pass
 
 
-class AWGNChannel:
-    def process(self, c, EsN0dB):
-        Pn = np.var(c) / (10. ** (EsN0dB / 10.))
-        return (np.sqrt(Pn / 2.) * np.random.randn(len(c))) + c
+class AWGNChannel(Channel):
+    def process(self, c, EbN0dB):
+        fec_factor = (np.size(self.fec_matrix, 1) / np.size(self.fec_matrix, 0))
+
+        Pn = np.var(c) / (10. ** (EbN0dB / 10.)) * (1 / self.BPS) * fec_factor
+
+        return (np.sqrt(Pn / 2.) * np.random.randn(len(c))) + np.array(c)
