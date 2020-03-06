@@ -36,39 +36,59 @@ class ChannelComponent:
 
         return rBPS[self.modulation]
 
+    
+class TransmitterMode(Enum):
+    CLASSIC = auto()
+    NETWORK = auto()
+
 
 class Transmitter(ChannelComponent):
+    def __init__(self, modulation='BPSK', fec_matrix=None, mode=TransmitterMode.CLASSIC, network=None):
+        super().__init__(modulation, fec_matrix)
+        
+        self.network = network
+        self.mode = mode
+    
     def transmit(self, b):
         b = np.array(b)
+        
+        if self.mode == TransmitterMode.NETWORK:
+            # TODO : Deplacer
+            receiver = Receiver(self.modulation, self.fec_matrix, ReceiverMode.MAP)
+            c_r = self.network.predict(np.array(np.split(b, len(b) // self.block_length)))
+            c_r = np.array(list(map(lambda x: receiver.block_coded_elements[np.argmax(x)], c_r)))
+            
+            return c_r.flatten()
+        elif self.mode == TransmitterMode.CLASSIC:
+            # Apply error correction code matrix
+            if self.has_fec_matrix:
+                nb_blocks = len(b) // self.block_length
+                b_t = np.zeros(nb_blocks * self.block_coded_length)
 
-        # Apply error correction code matrix
-        if self.has_fec_matrix:
-            nb_blocks = len(b) // self.block_length
-            b_t = np.zeros(nb_blocks * self.block_coded_length)
+                for i in range(nb_blocks):
+                    b_l = b[i * self.block_length:(i + 1) * self.block_length]
+                    b_t[i * self.block_coded_length:(i + 1) * self.block_coded_length] = np.dot(b_l, self.fec_matrix) % 2
+            else:
+                b_t = b
 
-            for i in range(nb_blocks):
-                b_l = b[i * self.block_length:(i + 1) * self.block_length]
-                b_t[i * self.block_coded_length:(i + 1) * self.block_coded_length] = np.dot(b_l, self.fec_matrix) % 2
-        else:
-            b_t = b
-
-        # Map symbols
-        if self.modulation in ['BPSK']:
-            return (2. * b_t) - 1.
-        else:
-            raise Exception(f"Unknown modulation {self.modulation}")
+            # Map symbols
+            if self.modulation in ['BPSK']:
+                return (2. * b_t) - 1.
+            else:
+                raise Exception(f"Unknown modulation {self.modulation}")
 
 
 class ReceiverMode(Enum):
     CLASSIC = auto()
     MAP = auto()
-    DEEP_LEARNING = auto()
+    NETWORK = auto()
 
 
 class Receiver(ChannelComponent):
-    def __init__(self, modulation='BPSK', fec_matrix=None, mode=ReceiverMode.MAP):
+    def __init__(self, modulation='BPSK', fec_matrix=None, mode=ReceiverMode.MAP, network=None):
         super().__init__(modulation, fec_matrix)
         self.mode = mode
+        self.network = network
 
         # Pre-calculate coded elements for G
         transmitter = Transmitter(modulation, self.fec_matrix)
@@ -111,7 +131,10 @@ class Receiver(ChannelComponent):
                 b_r[i * self.block_length:(i + 1) * self.block_length] = self.block_elements[int(np.argmin(distances))]
 
             return b_r
-
+        elif self.mode == ReceiverMode.NETWORK:
+            b_r = self.network.predict(np.array(np.split(y_n, len(y_n) // self.block_coded_length)))
+            b_r = np.array(list(map(lambda x: self.block_elements[np.argmax(x)], b_r)))
+            return b_r.flatten()
 
 class Channel(ChannelComponent, ABC):
     def __init__(self, modulation='BPSK', fec_matrix=None):
