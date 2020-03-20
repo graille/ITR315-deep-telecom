@@ -28,7 +28,7 @@ if __name__ == '__main__':
     # show_ber(MODULATION, EbN0dBs, BER)
     # plt.show()
 
-    np.savetxt('BER_G_MAP.csv', [
+    np.savetxt('outputs/BER_G_MAP.csv', [
         np.array(EbN0dBs),
         np.array(BER)
     ], delimiter=',')
