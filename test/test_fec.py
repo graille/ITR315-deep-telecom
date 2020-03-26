@@ -2,33 +2,30 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from src.communications import Transmitter, AWGNChannel, Receiver, ReceiverMode
-from src.utils import ber_performance, get_basic_channel_fct, show_ber, get_fec_matrix
+from src.communications import Transmitter, AWGNChannel, Receiver
+from src.utils import *
 
 # Configuration
 MODULATION = 'BPSK'
-EbN0dBs = np.linspace(-50, 7, 20)
+EbN0dBs = np.linspace(-20, 4, 10)
 G = get_fec_matrix('POLAR_8_16')
 
 # Initialization
 transmitter = Transmitter(MODULATION, G)
-channel = AWGNChannel(MODULATION, G)
-receiver = Receiver(MODULATION, G, ReceiverMode.MAP)
+receiver = Receiver(MODULATION, G)
+
+channel = AWGNChannel(get_bps(MODULATION), transmitter.block_length, transmitter.block_coded_length)
 
 if __name__ == '__main__':
     BER = ber_performance(
-        EbN0dBs[::-1],
+        EbN0dBs,
         get_basic_channel_fct(transmitter, channel, receiver),
-        np.size(G, 0) * 1000,
+        np.size(G, 0) * 100,
         500
-    )[::-1]
+    )
 
-    # # Plot results
-    # plt.figure()
-    # show_ber(MODULATION, EbN0dBs, BER)
-    # plt.show()
-
-    np.savetxt('outputs/BER_G_MAP.csv', [
-        np.array(EbN0dBs),
-        np.array(BER)
-    ], delimiter=',')
+    # Plot results
+    plt.figure()
+    show_ber(MODULATION, EbN0dBs, BER)
+    plt.legend(['BPSK Theory', 'MAP simulation'])
+    plt.show()
